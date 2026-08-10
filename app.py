@@ -1,95 +1,88 @@
 import streamlit as st
 import re
-import pandas as pd
 from pythainlp.tokenize import word_tokenize
-from pythainlp.corpus import thai_stopwords
-from pythainlp.util import normalize
-from pythainlp.tag import NER
+from pythainlp.corpus.common import thai_stopwords
+from pythainlp.tag import pos_tag, NER
+import pandas as pd
 
-# โหลดโมเดล NER ของภาษาไทยเตรียมไว้
-ner_model = NER("thainer")
+# โหลด NER Engine (ใช้ thainer)
+@st.cache_resource
+def load_ner():
+    return NER("thainer")
 
-st.title("🍜 ระบบวิเคราะห์รีวิวร้านอาหาร")
-st.write("แอปพลิเคชันสำหรับดึงข้อมูลสำคัญและจัดกลุ่มรีวิวร้านอาหาร")
+ner = load_ner()
+stopwords = list(thai_stopwords())
 
-# สร้างกล่องรับข้อความจากผู้ใช้ พร้อมข้อความจำลองสำหรับทดสอบ (Test Data)
-default_text = "ไปกินข้าวที่ร้านอาหารเชียงใหม่มาเมื่อวาน เมนูผัดไทยกุ้งสดอร่อยมากกกก บริการดีเยี่ยม สนใจจองโต๊ะโทร 081-234-5678 แนะนำเลยยยย"
-user_input = st.text_area("ใส่ข้อความรีวิวที่นี่:", default_text, height=150)
+st.title("🍽️ ระบบคัดกรองรีวิวร้านอาหาร")
+st.write("แอปพลิเคชันนี้ใช้เทคนิค NLP ในการสกัดข้อมูลและวิเคราะห์รีวิวร้านอาหาร")
 
-if st.button("เริ่มวิเคราะห์ข้อมูล"):
-    
-    # ---------------------------------------------------------
-    # 1. Regex & Cleansing (ทำความสะอาดข้อความ)
-    # ---------------------------------------------------------
-    st.subheader("1. การทำความสะอาดข้อมูล (Cleansing)")
-    
-    # ลบเบอร์โทรศัพท์ (เซ็นเซอร์ข้อมูลส่วนตัว)
-    text_no_phone = re.sub(r'\d{2,3}-\d{3,4}-\d{4}', '[เซ็นเซอร์เบอร์โทร]', user_input)
-    
-    # ลดตัวอักษรที่พิมพ์ลากเสียงยาว (เช่น มากกกก -> มาก)
-    cleaned_text = re.sub(r'(.)\1{2,}', r'\1', text_no_phone)
-    
-    st.info(f"ข้อความหลัง Clean: {cleaned_text}")
+# รับข้อความจากผู้ใช้
+raw_text = st.text_area("📝 พิมพ์ข้อความรีวิวที่นี่:", 
+                        "ร้านนี้อร่อยมากครับ บรรยากาศดีแอร์เย็น พนักงานบริการดีเยี่ยม อยู่ที่สยามพารากอน โทร 081-234-5678 ดูรีวิวเพิ่มเติมที่ https://example.com")
 
-    # ---------------------------------------------------------
-    # 2. Tokenization & Normalization (ตัดคำ & ลบคำฟุ่มเฟือย)
-    # ---------------------------------------------------------
-    st.subheader("2. การตัดคำ (Tokenization)")
+if st.button("ประมวลผลข้อความ"):
+    st.markdown("---")
     
-    # ปรับรูปสระให้ถูกต้อง
-    norm_text = normalize(cleaned_text)
-    
-    # ตัดคำ
-    tokens = word_tokenize(norm_text, engine='newmm')
-    
-    # ลบ Stopwords และช่องว่าง
-    stopwords = thai_stopwords()
-    filtered_tokens = []
-    for word in tokens:
-        word = word.strip()
-        if word != "" and word not in stopwords:
-            filtered_tokens.append(word)
-            
-    st.write(f"**คำที่สกัดได้:** {', '.join(filtered_tokens)}")
+    # 1. Regex & Cleansing: ลบเบอร์โทรศัพท์และลิงก์
+    st.subheader("1. Regex & Cleansing (การทำความสะอาดข้อมูล)")
+    clean_text = re.sub(r'0\d{1,2}-\d{3}-\d{4}', '[เบอร์โทรศัพท์ถูกซ่อน]', raw_text)
+    clean_text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '[ลิงก์ถูกซ่อน]', clean_text)
+    st.write("**ข้อความหลังทำความสะอาด:**", clean_text)
 
-    # ---------------------------------------------------------
-    # 3. POS & NER (สกัด Named Entities)
-    # ---------------------------------------------------------
-    st.subheader("3. การสกัดเอนทิตี (NER)")
+    # 2. Tokenization & Normalization: ตัดคำและลบ Stopwords
+    st.subheader("2. Tokenization & Normalization")
+    tokens = word_tokenize(clean_text, engine="newmm")
+    clean_tokens = [word for word in tokens if word not in stopwords and word.strip() != ""]
+    st.write("**คำที่ได้จากการตัดและลบ Stopwords:**")
+    st.write(clean_tokens)
+
+    # 3. POS & NER: สกัด Named Entities และ Part-of-Speech
+    st.subheader("3. POS & NER (การสกัดเอนทิตีและชนิดคำ)")
     
-    # ใช้ PyThaiNLP ดึงข้อมูล คน, สถานที่, องค์กร
-    ner_result = ner_model.tag(cleaned_text)
+    # POS Tagging (ดึงเฉพาะคำนามและคำคุณศัพท์มาดู Keyword)
+    pos_result = pos_tag(clean_tokens, corpus="pud")
+    keywords = [word for word, pos in pos_result if pos in ['NOUN', 'ADJ']]
     
-    # กรองเอาเฉพาะคำที่เป็น Entity (ไม่เอาแท็ก 'O')
+    # NER Tagging
+    ner_result = ner.tag(clean_text)
     entities = []
-    for word, pos, tag in ner_result:
-        if tag != 'O':
-            entities.append({"คำศัพท์": word, "ประเภท (Tag)": tag})
+    
+    # แก้ปัญหา Error จากภาพ โดยดักจับความยาวของ Tuple ให้รองรับทั้ง 2 และ 3 ค่า
+    for item in ner_result:
+        if len(item) == 3:
+            word, pos, tag = item
+        elif len(item) == 2:
+            word, tag = item
+        else:
+            continue
             
-    if len(entities) > 0:
-        st.table(pd.DataFrame(entities))
-    else:
-        st.write("ไม่พบชื่อคน สถานที่ หรือองค์กรในข้อความนี้")
+        if tag != 'O': # กรองเฉพาะคำที่เป็น Entity (ไม่เอา 'O' ที่แปลว่า Other)
+            entities.append(f"{word} ({tag})")
+            
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("**คำสำคัญ (Nouns/Adjectives):**")
+        st.write(keywords[:10]) # แสดงแค่ 10 คำแรก
+    with col2:
+        st.write("**Named Entities (สถานที่, องค์กร ฯลฯ):**")
+        st.write(entities if entities else "ไม่พบเอนทิตี")
 
-    # ---------------------------------------------------------
-    # 4. Topic Identification (จัดกลุ่มหัวข้อ)
-    # ---------------------------------------------------------
-    st.subheader("4. การจำแนกหัวข้อ (Topic Identification)")
-    
-    # ใช้วิธีนับคีย์เวิร์ดแบบง่ายๆ (Rule-based) เพื่อจัดกลุ่ม
-    food_keywords = ["อร่อย", "เมนู", "รสชาติ", "อาหาร", "ผัดไทย", "กุ้งสด", "หวาน", "เค็ม"]
-    service_keywords = ["บริการ", "พนักงาน", "รอ", "ช้า", "เร็ว", "บรรยากาศ", "ที่จอดรถ"]
-    
-    food_score = sum([1 for word in filtered_tokens if word in food_keywords])
-    service_score = sum([1 for word in filtered_tokens if word in service_keywords])
-    
-    if food_score > service_score:
-        topic = "🍽️ รีวิวเน้นรสชาติอาหาร"
-    elif service_score > food_score:
-        topic = "👨‍🍳 รีวิวเน้นการบริการ/บรรยากาศ"
-    elif food_score > 0 and service_score > 0:
-        topic = "⭐ รีวิวผสมผสาน (อาหารและการบริการ)"
+    # 4. Topic Identification: จัดกลุ่มหัวข้อหลักของข้อความ
+    st.subheader("4. Topic Identification (การจัดกลุ่มหัวข้อ)")
+    topics = []
+    food_keywords = ["อร่อย", "รสชาติ", "เค็ม", "หวาน", "เปรี้ยว", "เผ็ด", "อาหาร", "เมนู"]
+    service_keywords = ["พนักงาน", "บริการ", "ช้า", "เร็ว", "รอ", "สุภาพ"]
+    place_keywords = ["บรรยากาศ", "ร้าน", "แอร์", "ที่จอดรถ", "สะอาด", "กว้าง"]
+
+    text_to_check = "".join(clean_tokens)
+    if any(kw in text_to_check for kw in food_keywords):
+        topics.append("🍲 รสชาติ/อาหาร")
+    if any(kw in text_to_check for kw in service_keywords):
+        topics.append("🤵 การบริการ")
+    if any(kw in text_to_check for kw in place_keywords):
+        topics.append("🏪 บรรยากาศ/สถานที่")
+
+    if topics:
+        st.success(f"หัวข้อที่พบในรีวิวนี้: {', '.join(topics)}")
     else:
-        topic = "📝 รีวิวทั่วไป"
-        
-    st.success(f"ระบบจัดกลุ่มรีวิวนี้อยู่ในหมวดหมู่: **{topic}**")
+        st.info("ไม่สามารถระบุหัวข้อที่ชัดเจนได้จากรีวิวนี้")
