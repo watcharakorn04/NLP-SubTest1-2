@@ -1,3 +1,4 @@
-streamlit==1.31.0
-pythainlp==4.0.0
-pandas==2.2.0
+streamlit
+pythainlp
+pandas
+python-crfsuite
