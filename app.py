@@ -1,140 +1,406 @@
-import streamlit as st
 import re
+import json
+import html
 import pandas as pd
+import streamlit as st
 
 from pythainlp.tokenize import word_tokenize
 from pythainlp.corpus.common import thai_stopwords
 from pythainlp.tag import pos_tag, NER
 
 
-# =========================================================
-# PAGE CONFIG
-# =========================================================
+# ============================================================
+# PAGE
+# ============================================================
 
 st.set_page_config(
-    page_title="Restaurant Review NLP",
+    page_title="DineSense AI",
     page_icon="🍽️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 
-# =========================================================
-# CUSTOM CSS
-# =========================================================
+# ============================================================
+# MODERN UI
+# ============================================================
 
 st.markdown("""
 <style>
 
-    /* ---------- Global ---------- */
-    .main {
-        background-color: #f8fafc;
-    }
+/* ---------- GLOBAL ---------- */
 
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-        max-width: 1400px;
-    }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-    /* ---------- Header ---------- */
-    .hero {
-        padding: 2rem;
-        border-radius: 20px;
-        background: linear-gradient(
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+}
+
+.stApp {
+    background:
+        radial-gradient(
+            circle at 90% 0%,
+            rgba(251, 146, 60, 0.10),
+            transparent 28%
+        ),
+        radial-gradient(
+            circle at 0% 20%,
+            rgba(249, 115, 22, 0.06),
+            transparent 25%
+        ),
+        #f8fafc;
+}
+
+.block-container {
+    max-width: 1380px;
+    padding-top: 1.5rem;
+    padding-bottom: 4rem;
+}
+
+
+/* ---------- HIDE DEFAULT ---------- */
+
+#MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+header {
+    background: transparent !important;
+}
+
+
+/* ---------- NAV ---------- */
+
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0 1.5rem 0;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(
+        135deg,
+        #f97316,
+        #ea580c
+    );
+    box-shadow: 0 8px 20px rgba(234,88,12,.22);
+    font-size: 21px;
+}
+
+.brand-name {
+    font-weight: 800;
+    font-size: 18px;
+    color: #0f172a;
+}
+
+.brand-sub {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    padding: 7px 12px;
+    border-radius: 999px;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    background: #22c55e;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px #dcfce7;
+}
+
+
+/* ---------- HERO ---------- */
+
+.hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 28px;
+    padding: 42px 45px;
+    background:
+        radial-gradient(
+            circle at 85% 20%,
+            rgba(255,255,255,.20),
+            transparent 24%
+        ),
+        linear-gradient(
             135deg,
-            #ff6b35 0%,
-            #ff8c42 50%,
-            #ffb347 100%
+            #c2410c 0%,
+            #ea580c 45%,
+            #f97316 100%
         );
-        color: white;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 10px 30px rgba(255, 107, 53, 0.20);
-    }
+    box-shadow:
+        0 25px 60px rgba(194,65,12,.18);
+    margin-bottom: 25px;
+}
 
-    .hero h1 {
-        color: white;
-        margin-bottom: 0.4rem;
-        font-size: 2.4rem;
-    }
+.hero:after {
+    content: "";
+    position: absolute;
+    width: 250px;
+    height: 250px;
+    right: -90px;
+    bottom: -120px;
+    border-radius: 50%;
+    border: 45px solid rgba(255,255,255,.07);
+}
 
-    .hero p {
-        color: rgba(255,255,255,0.90);
-        font-size: 1.05rem;
-        margin-bottom: 0;
-    }
+.hero-kicker {
+    display: inline-block;
+    padding: 6px 11px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.15);
+    border: 1px solid rgba(255,255,255,.20);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .4px;
+    margin-bottom: 14px;
+}
 
-    /* ---------- Cards ---------- */
-    .info-card {
-        background: white;
-        padding: 1.2rem;
-        border-radius: 16px;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
-        height: 100%;
-    }
+.hero h1 {
+    color: white;
+    font-size: 40px;
+    line-height: 1.1;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -1.2px;
+}
 
-    .info-card-title {
-        font-size: 0.9rem;
-        color: #64748b;
-        margin-bottom: 0.3rem;
-    }
+.hero p {
+    color: rgba(255,255,255,.88);
+    font-size: 15px;
+    max-width: 680px;
+    line-height: 1.7;
+    margin-top: 14px;
+    margin-bottom: 0;
+}
 
-    .info-card-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #1e293b;
-    }
 
-    /* ---------- Section ---------- */
-    .section-title {
-        font-size: 1.35rem;
-        font-weight: 700;
-        color: #1e293b;
-        margin-top: 0.5rem;
-        margin-bottom: 0.8rem;
-    }
+/* ---------- SECTION ---------- */
 
-    /* ---------- Result Box ---------- */
-    .result-box {
-        padding: 1rem 1.2rem;
-        border-radius: 14px;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        margin-bottom: 0.8rem;
-    }
+.section-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-top: 28px;
+    margin-bottom: 5px;
+}
 
-    /* ---------- Topic Badge ---------- */
-    .topic-badge {
-        display: inline-block;
-        padding: 0.45rem 0.8rem;
-        margin: 0.25rem;
-        border-radius: 999px;
-        background: #fff7ed;
-        color: #c2410c;
-        border: 1px solid #fed7aa;
-        font-weight: 600;
-    }
+.section-sub {
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 15px;
+}
 
-    /* ---------- Footer ---------- */
-    .footer {
-        text-align: center;
-        color: #94a3b8;
-        padding-top: 2rem;
-        font-size: 0.85rem;
-    }
+
+/* ---------- INPUT CARD ---------- */
+
+.input-card {
+    background: rgba(255,255,255,.88);
+    border: 1px solid #e2e8f0;
+    border-radius: 22px;
+    padding: 22px;
+    box-shadow: 0 12px 35px rgba(15,23,42,.05);
+}
+
+
+/* ---------- METRIC ---------- */
+
+.metric-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 18px;
+    padding: 19px;
+    min-height: 105px;
+    box-shadow: 0 8px 25px rgba(15,23,42,.045);
+    transition: all .2s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 35px rgba(15,23,42,.08);
+}
+
+.metric-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.metric-icon {
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    background: #fff7ed;
+    font-size: 17px;
+}
+
+.metric-label {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 13px;
+}
+
+.metric-value {
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 800;
+    margin-top: 4px;
+}
+
+
+/* ---------- RESULT CARD ---------- */
+
+.result-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    padding: 21px;
+    min-height: 155px;
+    box-shadow: 0 8px 28px rgba(15,23,42,.045);
+}
+
+.result-icon {
+    font-size: 22px;
+}
+
+.result-title {
+    color: #64748b;
+    font-size: 12px;
+    margin-top: 11px;
+}
+
+.result-value {
+    color: #0f172a;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.4;
+    margin-top: 5px;
+}
+
+
+/* ---------- TAG ---------- */
+
+.tag {
+    display: inline-block;
+    padding: 7px 11px;
+    border-radius: 999px;
+    margin: 3px;
+    background: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.tag-green {
+    display: inline-block;
+    padding: 7px 11px;
+    border-radius: 999px;
+    margin: 3px;
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.tag-red {
+    display: inline-block;
+    padding: 7px 11px;
+    border-radius: 999px;
+    margin: 3px;
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+
+/* ---------- PROCESS ---------- */
+
+.pipeline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 18px 0 25px;
+    overflow-x: auto;
+}
+
+.pipeline-item {
+    white-space: nowrap;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 9px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #475569;
+}
+
+.pipeline-arrow {
+    color: #cbd5e1;
+}
+
+
+/* ---------- FOOTER ---------- */
+
+.modern-footer {
+    margin-top: 60px;
+    padding-top: 25px;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 11px;
+}
 
 </style>
 """, unsafe_allow_html=True)
 
 
-# =========================================================
-# LOAD MODEL
-# =========================================================
+# ============================================================
+# NLP MODEL
+# ============================================================
 
 @st.cache_resource
 def load_ner():
-    return NER("thainer")
+    try:
+        return NER("thainer")
+    except Exception:
+        return None
 
 
 @st.cache_data
@@ -146,103 +412,211 @@ ner_model = load_ner()
 stopwords = load_stopwords()
 
 
-# =========================================================
+# ============================================================
+# KEYWORDS
+# ============================================================
+
+POSITIVE = [
+    "อร่อย", "ดี", "ดีมาก", "เยี่ยม",
+    "ยอดเยี่ยม", "ประทับใจ", "ชอบ",
+    "คุ้ม", "สด", "หอม", "นุ่ม",
+    "กรอบ", "บริการดี", "บรรยากาศดี",
+    "delicious", "great", "good",
+    "excellent", "amazing", "friendly",
+    "fresh", "tasty", "love", "perfect",
+    "worth"
+]
+
+NEGATIVE = [
+    "ไม่อร่อย", "แย่", "แย่มาก",
+    "ผิดหวัง", "เค็ม", "หวานเกิน",
+    "เผ็ดเกิน", "แพง", "ช้า",
+    "รอนาน", "สกปรก", "เหม็น",
+    "บริการแย่", "ไม่คุ้ม",
+    "bad", "terrible", "awful",
+    "disappointing", "expensive",
+    "slow", "dirty", "worst"
+]
+
+FOOD = [
+    "อาหาร", "เมนู", "รสชาติ", "อร่อย",
+    "เค็ม", "หวาน", "เผ็ด",
+    "ผัดไทย", "กะเพรา", "ต้มยำ",
+    "ก๋วยเตี๋ยว", "ข้าว", "หมู", "ไก่",
+    "ปลา", "ของหวาน", "กาแฟ",
+    "เค้ก", "ไอศกรีม",
+    "food", "menu", "taste",
+    "delicious", "noodle", "rice",
+    "chicken", "pork", "dessert",
+    "coffee", "cake"
+]
+
+SERVICE = [
+    "พนักงาน", "บริการ", "รอ",
+    "ช้า", "เร็ว", "สุภาพ",
+    "บริการดี", "บริการแย่",
+    "staff", "service",
+    "wait", "slow", "friendly"
+]
+
+PLACE = [
+    "ร้าน", "บรรยากาศ",
+    "ที่จอดรถ", "ทำเล",
+    "สถานที่", "สยาม",
+    "ห้าง", "ใกล้",
+    "restaurant", "location",
+    "parking", "atmosphere",
+    "place"
+]
+
+PRICE = [
+    "ราคา", "แพง", "ถูก",
+    "คุ้ม", "บาท",
+    "price", "expensive",
+    "cheap", "worth"
+]
+
+MENUS = [
+    "ผัดไทย", "ผัดกะเพรา",
+    "กะเพรา", "ต้มยำ",
+    "ต้มยำกุ้ง", "ก๋วยเตี๋ยว",
+    "ข้าวมันไก่", "ข้าวผัด",
+    "หมูกรอบ", "ส้มตำ",
+    "ไก่ทอด", "พิซซ่า",
+    "เบอร์เกอร์", "สเต๊ก",
+    "ชาไทย", "กาแฟ",
+    "เค้ก", "ไอศกรีม",
+    "pad thai", "tom yum",
+    "fried rice", "burger",
+    "pizza", "steak",
+    "coffee", "cake"
+]
+
+
+# ============================================================
 # FUNCTIONS
-# =========================================================
+# ============================================================
 
 def clean_text(text):
-    """
-    ทำความสะอาดข้อความ
-    """
 
-    # Mask เบอร์โทรศัพท์
-    cleaned = re.sub(
-        r'0\d{1,2}[-\s]?\d{3}[-\s]?\d{4}',
-        '[เซ็นเซอร์เบอร์โทร]',
+    text = re.sub(
+        r"0\d{1,2}[-\s]?\d{3}[-\s]?\d{4}",
+        "[PHONE]",
         text
     )
 
-    # Mask URL
-    cleaned = re.sub(
-        r'https?://\S+|www\.\S+',
-        '[เซ็นเซอร์ลิงก์]',
-        cleaned
+    text = re.sub(
+        r"https?://\S+|www\.\S+",
+        "[URL]",
+        text
     )
 
-    # ลดการลากเสียง เช่น อร่อยยยยย -> อร่อย
-    cleaned = re.sub(
-        r'(.)\1{2,}',
-        r'\1',
-        cleaned
+    text = re.sub(
+        r"\[([^\]]+)\]\([^)]+\)",
+        r"\1",
+        text
     )
 
-    # ลดช่องว่างซ้ำ
-    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    text = re.sub(
+        r"(.)\1{2,}",
+        r"\1",
+        text
+    )
 
-    return cleaned
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    ).strip()
+
+    return text
 
 
 def tokenize_text(text):
-    """
-    ตัดคำ + ลบ Stopwords
-    """
 
     tokens = word_tokenize(
         text,
         engine="newmm"
     )
 
-    clean_tokens = [
-        word.strip()
-        for word in tokens
-        if word.strip()
-        and word not in stopwords
-    ]
+    english_stopwords = {
+        "the", "a", "an", "is", "are",
+        "was", "were", "and", "or",
+        "of", "to", "in", "on",
+        "at", "for", "this",
+        "that", "very", "really"
+    }
 
-    return clean_tokens
+    result = []
+
+    for token in tokens:
+
+        token = token.strip()
+
+        if not token:
+            continue
+
+        if token in stopwords:
+            continue
+
+        if token.lower() in english_stopwords:
+            continue
+
+        if re.fullmatch(r"[\W_]+", token):
+            continue
+
+        result.append(token)
+
+    return result
 
 
 def analyze_pos(tokens):
-    """
-    วิเคราะห์ Part-of-Speech
-    """
 
-    pos_result = pos_tag(
-        tokens,
-        corpus="pud"
-    )
+    try:
+        result = pos_tag(
+            tokens,
+            corpus="pud"
+        )
+    except Exception:
+        result = []
 
-    nouns = [
-        word
-        for word, pos in pos_result
-        if pos == "NOUN"
-    ]
+    nouns = []
+    adjectives = []
+    verbs = []
 
-    adjectives = [
-        word
-        for word, pos in pos_result
-        if pos == "ADJ"
-    ]
+    for item in result:
 
-    verbs = [
-        word
-        for word, pos in pos_result
-        if pos == "VERB"
-    ]
+        if len(item) < 2:
+            continue
 
-    return pos_result, nouns, adjectives, verbs
+        word = item[0]
+        tag = item[1]
+
+        if tag == "NOUN":
+            nouns.append(word)
+
+        elif tag == "ADJ":
+            adjectives.append(word)
+
+        elif tag == "VERB":
+            verbs.append(word)
+
+    return result, nouns, adjectives, verbs
 
 
 def analyze_ner(text):
-    """
-    วิเคราะห์ Named Entity Recognition
-    """
-
-    ner_result = ner_model.tag(text)
 
     entities = []
 
-    for item in ner_result:
+    if ner_model is None:
+        return entities
+
+    try:
+        result = ner_model.tag(text)
+    except Exception:
+        return entities
+
+    for item in result:
 
         if len(item) == 2:
             word, tag = item
@@ -254,558 +628,784 @@ def analyze_ner(text):
             continue
 
         if tag != "O":
+
             entities.append({
-                "คำศัพท์": word,
+                "คำ": word,
                 "ประเภท": tag
             })
 
     return entities
 
 
-def analyze_topics(tokens):
-    """
-    วิเคราะห์หัวข้อจาก Keyword
-    """
+def extract_restaurant(text, entities):
 
-    food_keywords = [
-        "อร่อย",
-        "รสชาติ",
-        "เค็ม",
-        "หวาน",
-        "เผ็ด",
-        "อาหาร",
-        "เมนู",
-        "ผัดไทย",
-        "ก๋วยเตี๋ยว",
-        "ข้าว",
-        "หมู",
-        "ไก่",
-        "ปลา"
+    found = []
+
+    for entity in entities:
+
+        if "ORG" in entity["ประเภท"].upper():
+            found.append(entity["คำ"])
+
+    patterns = [
+        r"ร้าน\s*([ก-๙A-Za-z0-9][^,.!?]{1,40})",
+        r"ที่ร้าน\s*([ก-๙A-Za-z0-9][^,.!?]{1,40})"
     ]
 
-    service_keywords = [
-        "พนักงาน",
-        "บริการ",
-        "ช้า",
-        "เร็ว",
-        "รอ",
-        "สุภาพ",
-        "บริการดี",
-        "บริการแย่"
+    for pattern in patterns:
+
+        matches = re.findall(
+            pattern,
+            text
+        )
+
+        for match in matches:
+
+            value = re.split(
+                r"\s+(?:แถว|อยู่|มี|บรรยากาศ|บริการ|สั่ง|ราคา|อร่อย|ดี)",
+                match
+            )[0].strip()
+
+            if value:
+                found.append(value)
+
+    return list(dict.fromkeys(found))
+
+
+def extract_location(text, entities):
+
+    found = []
+
+    for entity in entities:
+
+        tag = entity["ประเภท"].upper()
+
+        if "LOC" in tag or "LOCATION" in tag:
+            found.append(entity["คำ"])
+
+    patterns = [
+        r"อยู่ที่\s*([^,.!?]+)",
+        r"แถว\s*([^,.!?]+)",
+        r"บริเวณ\s*([^,.!?]+)",
+        r"ใกล้\s*([^,.!?]+)"
     ]
 
-    place_keywords = [
-        "บรรยากาศ",
-        "ร้าน",
-        "แอร์",
-        "ที่จอดรถ",
-        "สยาม",
-        "ทำเล",
-        "สถานที่"
+    for pattern in patterns:
+
+        matches = re.findall(
+            pattern,
+            text
+        )
+
+        for match in matches:
+
+            value = re.split(
+                r"\s+(?:โทร|มี|และ|ร้าน|บรรยากาศ|พนักงาน)",
+                match.strip()
+            )[0].strip()
+
+            if value:
+                found.append(value)
+
+    return list(dict.fromkeys(found))
+
+
+def extract_menu(text):
+
+    result = []
+
+    for menu in MENUS:
+
+        if menu.lower() in text.lower():
+            result.append(menu)
+
+    return list(dict.fromkeys(result))
+
+
+def sentiment(text):
+
+    lower = text.lower()
+
+    positive = [
+        x for x in POSITIVE
+        if x.lower() in lower
     ]
 
-    price_keywords = [
-        "ราคา",
-        "แพง",
-        "ถูก",
-        "คุ้ม",
-        "เงิน",
-        "บาท"
+    negative = [
+        x for x in NEGATIVE
+        if x.lower() in lower
     ]
 
-    text = " ".join(tokens)
+    if len(positive) > len(negative):
+        label = "😊 Positive"
 
-    topics = []
-
-    if any(keyword in text for keyword in food_keywords):
-        topics.append("🍲 รสชาติ / อาหาร")
-
-    if any(keyword in text for keyword in service_keywords):
-        topics.append("🤵 การบริการ")
-
-    if any(keyword in text for keyword in place_keywords):
-        topics.append("🏪 บรรยากาศ / สถานที่")
-
-    if any(keyword in text for keyword in price_keywords):
-        topics.append("💰 ราคา / ความคุ้มค่า")
-
-    return topics
-
-
-def analyze_sentiment(text):
-    """
-    วิเคราะห์ Sentiment แบบ Keyword-based
-    """
-
-    positive_words = [
-        "อร่อย",
-        "ดี",
-        "ดีมาก",
-        "เยี่ยม",
-        "ประทับใจ",
-        "คุ้ม",
-        "สด",
-        "อร่อยมาก",
-        "บริการดี",
-        "ชอบ"
-    ]
-
-    negative_words = [
-        "แย่",
-        "เค็ม",
-        "หวานเกิน",
-        "แพง",
-        "ช้า",
-        "ไม่อร่อย",
-        "ผิดหวัง",
-        "สกปรก",
-        "แย่มาก",
-        "รอนาน"
-    ]
-
-    positive_score = sum(
-        1 for word in positive_words
-        if word in text
-    )
-
-    negative_score = sum(
-        1 for word in negative_words
-        if word in text
-    )
-
-    if positive_score > negative_score:
-        return "😊 เชิงบวก", positive_score, negative_score
-
-    elif negative_score > positive_score:
-        return "😞 เชิงลบ", positive_score, negative_score
+    elif len(negative) > len(positive):
+        label = "😞 Negative"
 
     else:
-        return "😐 เป็นกลาง", positive_score, negative_score
+        label = "😐 Neutral"
+
+    return {
+        "label": label,
+        "positive": positive,
+        "negative": negative
+    }
 
 
-# =========================================================
-# HEADER
-# =========================================================
+def topics(text):
+
+    lower = text.lower()
+
+    result = []
+
+    if any(x.lower() in lower for x in FOOD):
+        result.append("🍲 อาหาร")
+
+    if any(x.lower() in lower for x in SERVICE):
+        result.append("🤝 บริการ")
+
+    if any(x.lower() in lower for x in PLACE):
+        result.append("📍 สถานที่")
+
+    if any(x.lower() in lower for x in PRICE):
+        result.append("💰 ราคา")
+
+    return result
+
+
+def analyze(text):
+
+    cleaned = clean_text(text)
+
+    tokens = tokenize_text(cleaned)
+
+    pos_result, nouns, adjectives, verbs = analyze_pos(
+        tokens
+    )
+
+    entities = analyze_ner(cleaned)
+
+    return {
+        "raw": text,
+        "cleaned": cleaned,
+        "tokens": tokens,
+        "nouns": nouns,
+        "adjectives": adjectives,
+        "verbs": verbs,
+        "entities": entities,
+        "restaurant": extract_restaurant(
+            cleaned,
+            entities
+        ),
+        "location": extract_location(
+            cleaned,
+            entities
+        ),
+        "menus": extract_menu(cleaned),
+        "sentiment": sentiment(cleaned),
+        "topics": topics(cleaned)
+    }
+
+
+# ============================================================
+# NAVIGATION
+# ============================================================
+
+st.markdown("""
+<div class="navbar">
+
+    <div class="brand">
+
+        <div class="brand-icon">
+            🍽️
+        </div>
+
+        <div>
+            <div class="brand-name">
+                DineSense AI
+            </div>
+
+            <div class="brand-sub">
+                Restaurant Review Intelligence
+            </div>
+        </div>
+
+    </div>
+
+    <div class="status">
+        <span class="status-dot"></span>
+        NLP Engine Online
+    </div>
+
+</div>
+""", unsafe_allow_html=True)
+
+
+# ============================================================
+# HERO
+# ============================================================
 
 st.markdown("""
 <div class="hero">
 
-    <h1>🍽️ Restaurant Review NLP</h1>
+    <div class="hero-kicker">
+        ✦ AI-POWERED NLP ANALYTICS
+    </div>
+
+    <h1>
+        Understand every<br>
+        restaurant review.
+    </h1>
 
     <p>
-        ระบบวิเคราะห์และคัดกรองรีวิวร้านอาหารด้วย
-        Natural Language Processing (NLP)
+        วิเคราะห์รีวิวร้านอาหารด้วย Natural Language Processing
+        พร้อมสกัดชื่อร้าน สถานที่ เมนู คำชม คำติ
+        Topic และ Sentiment จากข้อความภาษาไทยและภาษาอังกฤษ
     </p>
 
 </div>
 """, unsafe_allow_html=True)
 
 
-# =========================================================
-# SIDEBAR
-# =========================================================
+# ============================================================
+# PIPELINE
+# ============================================================
 
-with st.sidebar:
+st.markdown("""
+<div class="pipeline">
 
-    st.header("⚙️ การตั้งค่า")
+    <div class="pipeline-item">01 · Clean</div>
+    <div class="pipeline-arrow">→</div>
 
-    st.markdown("""
-    **Pipeline**
+    <div class="pipeline-item">02 · Tokenize</div>
+    <div class="pipeline-arrow">→</div>
 
-    🧹 Text Cleaning  
-    ↓  
-    ✂️ Tokenization  
-    ↓  
-    🏷️ POS Tagging  
-    ↓  
-    🔎 Named Entity Recognition  
-    ↓  
-    💡 Topic Identification  
-    ↓  
-    😊 Sentiment Analysis
-    """)
+    <div class="pipeline-item">03 · POS / NER</div>
+    <div class="pipeline-arrow">→</div>
 
-    st.divider()
+    <div class="pipeline-item">04 · Extract</div>
+    <div class="pipeline-arrow">→</div>
 
-    st.caption(
-        "ระบบนี้ใช้ PyThaiNLP สำหรับการประมวลผลภาษาไทย"
-    )
+    <div class="pipeline-item">05 · Topic</div>
+    <div class="pipeline-arrow">→</div>
+
+    <div class="pipeline-item">06 · Sentiment</div>
+
+</div>
+""", unsafe_allow_html=True)
 
 
-# =========================================================
+# ============================================================
 # INPUT
-# =========================================================
+# ============================================================
 
 st.markdown(
-    '<div class="section-title">📝 ข้อความรีวิว</div>',
+    '<div class="section-title">Analyze a review</div>',
     unsafe_allow_html=True
 )
 
-with st.container(border=True):
+st.markdown(
+    '<div class="section-sub">วางข้อความรีวิวเพื่อเริ่มการวิเคราะห์</div>',
+    unsafe_allow_html=True
+)
 
-    raw_text = st.text_area(
-        "พิมพ์ข้อความรีวิวที่ต้องการวิเคราะห์",
-        value=(
-            "ร้านนี้อร่อยมากครับ บรรยากาศดี แอร์เย็น "
-            "พนักงานบริการดีเยี่ยม อยู่ที่สยามพารากอน "
-            "โทร 081-234-5678 "
-            "ดูรีวิวเพิ่มเติมที่ https://example.com"
-        ),
-        height=160,
-        label_visibility="collapsed"
-    )
+demo = {
+    "🇹🇭 Thai example":
+        "ร้านครัวบ้านสวนอร่อยมากครับ "
+        "บรรยากาศดี พนักงานบริการดีเยี่ยม "
+        "ผมสั่งผัดไทยกับต้มยำกุ้ง "
+        "รสชาติอร่อยมาก แต่ต้มยำค่อนข้างเค็ม "
+        "ร้านอยู่ที่สยามพารากอน "
+        "โทร 081-234-5678 "
+        "https://example.com",
 
-    submit_btn = st.button(
-        "🚀 เริ่มการวิเคราะห์",
-        type="primary",
-        use_container_width=True
-    )
+    "🇬🇧 English example":
+        "The food at ABC Restaurant was delicious. "
+        "The staff were friendly and the atmosphere was great. "
+        "I ordered pad thai and fried rice. "
+        "The price was expensive but worth it.",
+
+    "✍️ Write my own review": ""
+}
+
+selected = st.selectbox(
+    "Example",
+    list(demo.keys()),
+    label_visibility="collapsed"
+)
+
+review = st.text_area(
+    "Review",
+    value=demo[selected],
+    height=170,
+    placeholder="เช่น ร้านนี้อาหารอร่อยมาก พนักงานบริการดี...",
+    label_visibility="collapsed"
+)
+
+analyze_button = st.button(
+    "✨ Analyze Review",
+    type="primary",
+    use_container_width=True
+)
 
 
-# =========================================================
-# PROCESSING
-# =========================================================
+# ============================================================
+# RESULT
+# ============================================================
 
-if submit_btn:
+if analyze_button:
 
-    if not raw_text.strip():
+    if not review.strip():
 
-        st.warning("⚠️ กรุณาพิมพ์ข้อความรีวิวก่อนเริ่มการวิเคราะห์")
+        st.warning(
+            "กรุณากรอกข้อความรีวิวก่อนเริ่มวิเคราะห์"
+        )
 
         st.stop()
 
-    with st.spinner("🔄 กำลังประมวลผลข้อความ..."):
+    with st.spinner("Analyzing your review..."):
 
-        # -----------------------------
-        # Cleaning
-        # -----------------------------
+        result = analyze(review)
 
-        clean = clean_text(raw_text)
+    st.success(
+        "Analysis completed successfully"
+    )
 
-        # -----------------------------
-        # Tokenization
-        # -----------------------------
+    # --------------------------------------------------------
+    # KEY RESULTS
+    # --------------------------------------------------------
 
-        tokens = tokenize_text(clean)
+    st.markdown(
+        '<div class="section-title">Key insights</div>',
+        unsafe_allow_html=True
+    )
 
-        # -----------------------------
-        # POS
-        # -----------------------------
+    restaurant = (
+        ", ".join(result["restaurant"])
+        if result["restaurant"]
+        else "ไม่พบ"
+    )
 
-        pos_result, nouns, adjectives, verbs = analyze_pos(tokens)
+    location = (
+        ", ".join(result["location"])
+        if result["location"]
+        else "ไม่พบ"
+    )
 
-        # -----------------------------
-        # NER
-        # -----------------------------
+    menus = (
+        ", ".join(result["menus"])
+        if result["menus"]
+        else "ไม่พบ"
+    )
 
-        entities = analyze_ner(clean)
+    sentiment_label = result["sentiment"]["label"]
 
-        # -----------------------------
-        # Topics
-        # -----------------------------
+    cards = [
+        ("🏪", "Restaurant", restaurant),
+        ("📍", "Location", location),
+        ("🍜", "Menu", menus),
+        ("💬", "Sentiment", sentiment_label),
+    ]
 
-        topics = analyze_topics(tokens)
+    cols = st.columns(4)
 
-        # -----------------------------
-        # Sentiment
-        # -----------------------------
+    for col, card in zip(cols, cards):
 
-        sentiment, positive_score, negative_score = analyze_sentiment(
-            clean
-        )
+        icon, title, value = card
 
-    # =====================================================
-    # SUCCESS
-    # =====================================================
+        with col:
 
-    st.success("✨ วิเคราะห์ข้อความเสร็จสมบูรณ์!")
+            st.markdown(
+                f"""
+                <div class="result-card">
 
-    # =====================================================
-    # SUMMARY METRICS
-    # =====================================================
+                    <div class="result-icon">
+                        {icon}
+                    </div>
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+                    <div class="result-title">
+                        {title}
+                    </div>
 
-    with col1:
-        st.metric(
-            "🔤 จำนวนคำ",
-            len(tokens)
-        )
+                    <div class="result-value">
+                        {html.escape(value)}
+                    </div>
 
-    with col2:
-        st.metric(
-            "🏷️ NER",
-            len(entities)
-        )
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-    with col3:
-        st.metric(
-            "📚 คำนาม",
-            len(nouns)
-        )
+    # --------------------------------------------------------
+    # METRICS
+    # --------------------------------------------------------
 
-    with col4:
-        st.metric(
-            "✨ คำคุณศัพท์",
-            len(adjectives)
-        )
+    st.markdown(
+        '<div class="section-title">NLP metrics</div>',
+        unsafe_allow_html=True
+    )
 
-    with col5:
-        st.metric(
-            "💡 หัวข้อ",
-            len(topics)
-        )
+    metric_data = [
+        ("🔤", "Tokens", len(result["tokens"])),
+        ("🏷️", "Entities", len(result["entities"])),
+        ("📚", "Nouns", len(result["nouns"])),
+        ("✨", "Adjectives", len(result["adjectives"])),
+        ("💡", "Topics", len(result["topics"])),
+    ]
+
+    cols = st.columns(5)
+
+    for col, data in zip(cols, metric_data):
+
+        icon, label, value = data
+
+        with col:
+
+            st.markdown(
+                f"""
+                <div class="metric-card">
+
+                    <div class="metric-top">
+
+                        <div class="metric-icon">
+                            {icon}
+                        </div>
+
+                    </div>
+
+                    <div class="metric-label">
+                        {label}
+                    </div>
+
+                    <div class="metric-value">
+                        {value}
+                    </div>
+
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
     st.divider()
 
-    # =====================================================
-    # MAIN TABS
-    # =====================================================
+    # --------------------------------------------------------
+    # TABS
+    # --------------------------------------------------------
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🧹 Text Cleaning",
-        "✂️ Tokenization",
+    tabs = st.tabs([
+        "✨ Insights",
+        "🧹 Cleaning",
+        "✂️ Tokens",
         "🏷️ POS & NER",
-        "💡 Topic",
-        "😊 Sentiment"
+        "📦 JSON"
     ])
 
-    # =====================================================
-    # TAB 1
-    # =====================================================
+    # ========================================================
+    # INSIGHTS
+    # ========================================================
 
-    with tab1:
+    with tabs[0]:
 
-        st.subheader("🧹 การทำความสะอาดข้อความ")
+        left, right = st.columns(
+            [1.2, 1]
+        )
 
-        col1, col2 = st.columns(2)
+        with left:
 
-        with col1:
+            st.markdown(
+                '<div class="section-title">💡 Topics detected</div>',
+                unsafe_allow_html=True
+            )
 
-            st.markdown("### 📄 ข้อความต้นฉบับ")
+            if result["topics"]:
 
-            st.info(raw_text)
+                for topic in result["topics"]:
 
-        with col2:
+                    st.markdown(
+                        f"""
+                        <span class="tag">
+                            {html.escape(topic)}
+                        </span>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
-            st.markdown("### ✨ ข้อความหลัง Clean")
+            else:
 
-            st.success(clean)
+                st.caption(
+                    "ไม่พบหัวข้อที่ชัดเจน"
+                )
 
-        st.markdown("### 🔐 ข้อมูลที่ถูก Mask")
+        with right:
 
-        masked_items = []
+            st.markdown(
+                '<div class="section-title">😊 Sentiment</div>',
+                unsafe_allow_html=True
+            )
 
-        if "[เซ็นเซอร์เบอร์โทร]" in clean:
-            masked_items.append("📱 เบอร์โทรศัพท์")
+            if (
+                len(result["sentiment"]["positive"])
+                >
+                len(result["sentiment"]["negative"])
+            ):
 
-        if "[เซ็นเซอร์ลิงก์]" in clean:
-            masked_items.append("🔗 URL / Link")
+                st.success(
+                    "ความคิดเห็นมีแนวโน้มเป็น Positive"
+                )
 
-        if masked_items:
+            elif (
+                len(result["sentiment"]["negative"])
+                >
+                len(result["sentiment"]["positive"])
+            ):
 
-            for item in masked_items:
+                st.error(
+                    "ความคิดเห็นมีแนวโน้มเป็น Negative"
+                )
+
+            else:
+
+                st.info(
+                    "ความคิดเห็นมีแนวโน้มเป็น Neutral"
+                )
+
+        st.markdown(
+            '<div class="section-title">👍 Positive words</div>',
+            unsafe_allow_html=True
+        )
+
+        if result["sentiment"]["positive"]:
+
+            for word in result["sentiment"]["positive"]:
+
                 st.markdown(
-                    f'<span class="topic-badge">{item}</span>',
+                    f"""
+                    <span class="tag-green">
+                        {html.escape(word)}
+                    </span>
+                    """,
                     unsafe_allow_html=True
                 )
 
         else:
 
-            st.caption("ไม่พบข้อมูลที่ต้อง Mask")
+            st.caption("ไม่พบ")
 
-
-    # =====================================================
-    # TAB 2
-    # =====================================================
-
-    with tab2:
-
-        st.subheader("✂️ Tokenization")
-
-        st.write(
-            "ระบบแบ่งข้อความออกเป็นคำ และลบ Stopwords "
-            "ภาษาไทยที่ไม่จำเป็นต่อการวิเคราะห์"
+        st.markdown(
+            '<div class="section-title">👎 Negative words</div>',
+            unsafe_allow_html=True
         )
 
-        if tokens:
+        if result["sentiment"]["negative"]:
 
-            token_df = pd.DataFrame({
-                "ลำดับ": range(1, len(tokens) + 1),
-                "Token": tokens
-            })
+            for word in result["sentiment"]["negative"]:
 
-            st.dataframe(
-                token_df,
-                use_container_width=True,
-                hide_index=True
-            )
+                st.markdown(
+                    f"""
+                    <span class="tag-red">
+                        {html.escape(word)}
+                    </span>
+                    """,
+                    unsafe_allow_html=True
+                )
 
         else:
 
-            st.warning("ไม่พบ Token")
+            st.caption("ไม่พบ")
 
+    # ========================================================
+    # CLEANING
+    # ========================================================
 
-    # =====================================================
-    # TAB 3
-    # =====================================================
+    with tabs[1]:
 
-    with tab3:
+        st.markdown(
+            '<div class="section-title">🧹 Regex & Cleansing</div>',
+            unsafe_allow_html=True
+        )
 
-        st.subheader("🏷️ Part-of-Speech & Named Entity")
+        c1, c2 = st.columns(2)
 
-        col_pos, col_ner = st.columns(2)
+        with c1:
 
-        # -------------------------
-        # POS
-        # -------------------------
+            st.markdown("**Original text**")
 
-        with col_pos:
+            st.info(
+                result["raw"]
+            )
 
-            st.markdown("### 🔤 Part-of-Speech")
+        with c2:
 
-            st.markdown("**คำนาม (NOUN)**")
+            st.markdown("**Cleaned text**")
 
-            if nouns:
-                st.write(" • ".join(nouns))
-            else:
-                st.caption("ไม่พบ")
+            st.success(
+                result["cleaned"]
+            )
 
-            st.markdown("**คำคุณศัพท์ (ADJ)**")
+        st.markdown("""
+**Processing applied**
 
-            if adjectives:
-                st.write(" • ".join(adjectives))
-            else:
-                st.caption("ไม่พบ")
+- 📱 Phone number masking
+- 🔗 URL masking
+- ✨ Repeated-character normalization
+- 🧹 Whitespace normalization
+        """)
 
-            st.markdown("**คำกริยา (VERB)**")
+    # ========================================================
+    # TOKENS
+    # ========================================================
 
-            if verbs:
-                st.write(" • ".join(verbs))
-            else:
-                st.caption("ไม่พบ")
+    with tabs[2]:
 
-        # -------------------------
-        # NER
-        # -------------------------
+        st.markdown(
+            '<div class="section-title">✂️ Tokenization</div>',
+            unsafe_allow_html=True
+        )
 
-        with col_ner:
+        token_df = pd.DataFrame({
+            "Index":
+                range(
+                    1,
+                    len(result["tokens"]) + 1
+                ),
+            "Token":
+                result["tokens"]
+        })
 
-            st.markdown("### 🔎 Named Entities")
+        st.dataframe(
+            token_df,
+            use_container_width=True,
+            hide_index=True
+        )
 
-            if entities:
+    # ========================================================
+    # POS / NER
+    # ========================================================
 
-                entity_df = pd.DataFrame(entities)
+    with tabs[3]:
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+
+            st.markdown(
+                '<div class="section-title">🏷️ POS Tagging</div>',
+                unsafe_allow_html=True
+            )
+
+            st.markdown("**NOUN**")
+
+            st.write(
+                ", ".join(result["nouns"])
+                if result["nouns"]
+                else "ไม่พบ"
+            )
+
+            st.markdown("**ADJ**")
+
+            st.write(
+                ", ".join(result["adjectives"])
+                if result["adjectives"]
+                else "ไม่พบ"
+            )
+
+            st.markdown("**VERB**")
+
+            st.write(
+                ", ".join(result["verbs"])
+                if result["verbs"]
+                else "ไม่พบ"
+            )
+
+        with c2:
+
+            st.markdown(
+                '<div class="section-title">🔎 Named Entities</div>',
+                unsafe_allow_html=True
+            )
+
+            if result["entities"]:
+
+                df = pd.DataFrame(
+                    result["entities"]
+                )
 
                 st.dataframe(
-                    entity_df,
+                    df,
                     use_container_width=True,
                     hide_index=True
                 )
 
             else:
 
-                st.info("ไม่พบ Named Entity")
-
-
-    # =====================================================
-    # TAB 4
-    # =====================================================
-
-    with tab4:
-
-        st.subheader("💡 Topic Identification")
-
-        if topics:
-
-            st.markdown("### หัวข้อที่พบ")
-
-            for topic in topics:
-
-                st.markdown(
-                    f"""
-                    <span class="topic-badge">
-                        {topic}
-                    </span>
-                    """,
-                    unsafe_allow_html=True
+                st.info(
+                    "ไม่พบ Named Entity"
                 )
 
-            st.divider()
+    # ========================================================
+    # JSON
+    # ========================================================
 
-            st.success(
-                f"พบหัวข้อทั้งหมด {len(topics)} หัวข้อ"
-            )
+    with tabs[4]:
 
-        else:
+        export = {
+            "restaurant":
+                result["restaurant"],
 
-            st.warning(
-                "ไม่สามารถระบุหัวข้อที่ชัดเจนจากข้อความนี้ได้"
-            )
+            "location":
+                result["location"],
 
+            "menus":
+                result["menus"],
 
-    # =====================================================
-    # TAB 5
-    # =====================================================
+            "positive_words":
+                result["sentiment"]["positive"],
 
-    with tab5:
+            "negative_words":
+                result["sentiment"]["negative"],
 
-        st.subheader("😊 Sentiment Analysis")
+            "sentiment":
+                result["sentiment"]["label"],
 
-        col1, col2, col3 = st.columns(3)
+            "topics":
+                result["topics"],
 
-        with col1:
+            "tokens":
+                result["tokens"],
 
-            st.metric(
-                "ผลการวิเคราะห์",
-                sentiment
-            )
+            "entities":
+                result["entities"]
+        }
 
-        with col2:
+        st.json(export)
 
-            st.metric(
-                "😊 Positive Keywords",
-                positive_score
-            )
+        json_data = json.dumps(
+            export,
+            ensure_ascii=False,
+            indent=2
+        )
 
-        with col3:
-
-            st.metric(
-                "😞 Negative Keywords",
-                negative_score
-            )
-
-        st.divider()
-
-        if "เชิงบวก" in sentiment:
-
-            st.success(
-                "รีวิวนี้มีแนวโน้มเป็นความคิดเห็นเชิงบวก 👍"
-            )
-
-        elif "เชิงลบ" in sentiment:
-
-            st.error(
-                "รีวิวนี้มีแนวโน้มเป็นความคิดเห็นเชิงลบ 👎"
-            )
-
-        else:
-
-            st.info(
-                "รีวิวนี้มีแนวโน้มเป็นความคิดเห็นที่เป็นกลาง 😐"
-            )
+        st.download_button(
+            "⬇️ Download JSON",
+            data=json_data,
+            file_name="restaurant_analysis.json",
+            mime="application/json",
+            use_container_width=True
+        )
 
 
-# =========================================================
+# ============================================================
 # FOOTER
-# =========================================================
+# ============================================================
 
 st.markdown("""
-<div class="footer">
+<div class="modern-footer">
 
-    🍽️ Restaurant Review NLP Dashboard  
-    <br>
-    Powered by Python • Streamlit • PyThaiNLP
+    <b>DineSense AI</b>
+    · Restaurant Review Intelligence
+
+    <br><br>
+
+    Built with Python · Streamlit · PyThaiNLP · NLP
 
 </div>
 """, unsafe_allow_html=True)
